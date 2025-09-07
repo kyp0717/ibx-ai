@@ -18,7 +18,7 @@
 
 ## Goal
 - Build a python app to trade stock using interactive broker trader workstation.
-- Use the python package ibapi which is published interactive broker. 
+- Use the python package ibapi which is published by interactive broker. 
 - Do not use third party package such as ib_async, ib_insync or ibridepy.
 
 ## Feature 1 - Documenting Requirements  
