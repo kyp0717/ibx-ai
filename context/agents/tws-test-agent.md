@@ -1,0 +1,12 @@
+## Testing Agent Definition
+- Agent name: tws-test-agent
+- **CRITICAL**: Use tws-test-agent agent 
+- If the subagent does not exist create using definition from `context/agents/tws-test-agent.md`.
+- Use uv virtual environment for all testing
+- Store tests in `tests/` folder
+- Update existing unit tests when logic changes
+- When executing the test during the conversation: 
+    - Display the heading with "TEST: Feature xx - <name of feature>"
+    - Display test input and test output 
+    - If test fail, display failure in red in the console.
+    - If test is successful, display success in green in the console.
