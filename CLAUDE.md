@@ -3,7 +3,7 @@ Interactive Brokers trading application using Python and IBAPI.
 
 ## Project Awareness
 **At conversation start, read**:
-- `context/project-plan/*.md` - Architecture, style, constraints
+- `context/implement-plan/*.md` - Architecture, style, constraints
 - `context/tasks.md` - Current progress and feature status
 - `context/requirements.md` - Technical specifications
 - `context/logs/*.md` - Completed features and issues
@@ -63,12 +63,15 @@ When adding new features:
 1. **Module Structure**
    - Create new file in `src/` named after feature
    - Define main struct and result types
-   - **scripts/** - Shell scripts and automation
 
 2. **Testing**
    - Create unit tests in `tests/test_your_feature_unit.py`
    - Follow strict TDD: RED → GREEN → REFACTOR
    - Each feature must be independent and self-contained
+
+3. **Scripts**
+   - Create new scripts and save to `scripts/` folder
+   - Shell scripts and automation
 
 ## Documentation Requirements
 - Update README.md only when: features added, dependencies change, setup modified

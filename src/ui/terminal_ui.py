@@ -18,6 +18,7 @@ from threading import Lock
 
 from .panels.header_panel import HeaderPanel
 from .panels.system_message_panel import SystemMessagePanel
+from .panels.log_panel import LogPanel
 from .panels.market_data_panel import MarketDataPanel
 from .panels.position_orders_panel import PositionOrdersPanel
 from .panels.indicators_panel import IndicatorsPanel
@@ -25,9 +26,10 @@ from .panels.trading_prompt import TradingPrompt
 
 
 class TerminalUI:
-    def __init__(self, client=None):
+    def __init__(self, client=None, port: int = 7497):
         self.console = Console()
         self.client = client
+        self.port = port
         self.layout = Layout()
         self.data_lock = Lock()
         
@@ -36,6 +38,7 @@ class TerminalUI:
         self.order_data = {}
         self.indicators_data = {}
         self.messages = []
+        self.log_messages = []
         self.prompt_text = ""
         self.is_running = False
         
@@ -45,11 +48,17 @@ class TerminalUI:
     def _setup_layout(self):
         """Setup the main layout structure"""
         self.layout.split(
-            Layout(name="header", size=3),
-            Layout(name="messages", size=5),
+            Layout(name="header", size=4),
+            Layout(name="top_panels", size=5),
             Layout(name="main", size=15),
-            Layout(name="indicators", size=8),
+            Layout(name="indicators", size=7),
             Layout(name="prompt", size=3)
+        )
+        
+        # Split top panels into system messages and logs side by side
+        self.layout["top_panels"].split_row(
+            Layout(name="messages", ratio=1),
+            Layout(name="logs", ratio=1)
         )
         
         self.layout["main"].split_row(
@@ -61,6 +70,7 @@ class TerminalUI:
         """Initialize all panel instances"""
         self.header_panel = HeaderPanel()
         self.message_panel = SystemMessagePanel()
+        self.log_panel = LogPanel()
         self.market_panel = MarketDataPanel()
         self.position_panel = PositionOrdersPanel()
         self.indicators_panel = IndicatorsPanel()
@@ -119,6 +129,18 @@ class TerminalUI:
             if len(self.messages) > 50:
                 self.messages = self.messages[-50:]
     
+    def add_log_message(self, message: str, level: str = "INFO"):
+        """Add a log message to the log panel"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        with self.data_lock:
+            self.log_messages.append({
+                "time": timestamp,
+                "message": message,
+                "level": level
+            })
+            if len(self.log_messages) > 50:
+                self.log_messages = self.log_messages[-50:]
+    
     def update_prompt(self, prompt_text: str):
         """Update the trading prompt text"""
         with self.data_lock:
@@ -130,13 +152,17 @@ class TerminalUI:
             self.layout["header"].update(
                 self.header_panel.render(
                     connected=self.client.is_connected() if self.client else False,
-                    order_id=self.client.next_order_id if self.client else 0,
-                    port=7500
+                    order_id=self.client.next_order_id if (self.client and self.client.next_order_id) else 0,
+                    port=self.port
                 )
             )
             
             self.layout["messages"].update(
                 self.message_panel.render(self.messages)
+            )
+            
+            self.layout["logs"].update(
+                self.log_panel.render(self.log_messages)
             )
             
             self.layout["market"].update(

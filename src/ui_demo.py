@@ -10,6 +10,19 @@ from datetime import datetime
 from ui.terminal_ui import TerminalUI
 
 
+class MockClient:
+    """Mock client for demo purposes"""
+    def __init__(self):
+        self.next_order_id = 123
+        self.positions = {}
+        self.orders = {}
+        self.commissions = {}
+    
+    def is_connected(self):
+        """Always return True for demo"""
+        return True
+
+
 def simulate_market_data(ui: TerminalUI):
     """Simulate market data updates"""
     base_price = 150.0
@@ -57,7 +70,7 @@ def simulate_trading_flow(ui: TerminalUI):
     time.sleep(3)
     
     # Add system messages
-    ui.add_system_message("Connected to TWS successfully", "success")
+    ui.add_system_message(f"Connected to TWS on port {ui.port}", "success")
     time.sleep(1)
     ui.add_system_message("Market data subscription active for AAPL", "info")
     time.sleep(2)
@@ -135,13 +148,15 @@ def simulate_trading_flow(ui: TerminalUI):
     ui.update_prompt("Exit the trade (press enter)?")
 
 
-def main():
+def main(port=7497):
     print("Starting Terminal UI Demo...")
+    print(f"Simulating connection on port {port}")
     print("Press Ctrl+C to exit")
     time.sleep(2)
     
-    # Create UI instance
-    ui = TerminalUI()
+    # Create mock client and UI instance
+    mock_client = MockClient()
+    ui = TerminalUI(client=mock_client, port=port)
     
     # Start data simulation threads
     market_thread = threading.Thread(target=simulate_market_data, args=(ui,))

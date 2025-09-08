@@ -14,17 +14,37 @@ from datetime import datetime
 
 from order_placement import OrderClient
 from ui.terminal_ui import TerminalUI
+from ui.ui_log_handler import UILogHandler
+
+# Create UI log handler (will be attached to UI later)
+ui_handler = UILogHandler()
+ui_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+
+# Configure logging with both file and UI handlers
+log_dir = Path("logs")
+log_dir.mkdir(exist_ok=True)
+log_file = log_dir / f"trading_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.INFO,  # Set to INFO to capture more messages
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_file),
+        ui_handler  # This will redirect to UI panel
+    ]
 )
+
+# Set specific loggers to appropriate levels
+logging.getLogger("ibapi").setLevel(logging.WARNING)
+logging.getLogger("ibapi.client").setLevel(logging.WARNING)
+logging.getLogger("ibapi.wrapper").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
 
 class TradingApp:
-    def __init__(self, symbol: str, position_size: int):
+    def __init__(self, port: int, symbol: str, position_size: int):
+        self.port = port
         self.symbol = symbol
         self.position_size = position_size
         self.client = None
@@ -42,7 +62,7 @@ class TradingApp:
         """Connect to TWS"""
         self.client = OrderClient()
         
-        if not self.client.connect_to_tws(host="127.0.0.1", port=7500, client_id=1):
+        if not self.client.connect_to_tws(host="127.0.0.1", port=self.port, client_id=1):
             return False
         
         return True
@@ -105,7 +125,7 @@ class TradingApp:
         """Handle the trading flow with user interaction"""
         time.sleep(2)  # Wait for UI to initialize
         
-        self.ui.add_system_message(f"Connected to TWS on port 7500", "success")
+        self.ui.add_system_message(f"Connected to TWS on port {self.port}", "success")
         self.ui.add_system_message(f"Market data subscription active for {self.symbol}", "info")
         
         while self.running:
@@ -143,7 +163,7 @@ class TradingApp:
                             )
                             
                             # Monitor order
-                            self.monitor_order(result, "Open")
+                            result = self.monitor_order(result, "Open")
                             
                             if result.is_filled():
                                 self.order_filled = True
@@ -151,6 +171,13 @@ class TradingApp:
                                 self.ui.add_system_message(
                                     f"Order filled: {result.quantity} shares @ ${result.avg_fill_price:.2f}",
                                     "success"
+                                )
+                            elif result.status == "CANCELLED":
+                                # Reset flags to allow retry
+                                self.order_placed = False
+                                self.ui.add_system_message(
+                                    "Order was cancelled. You can try placing a new order.",
+                                    "warning"
                                 )
                 
                 elif self.order_filled and not self.position_closed:
@@ -180,7 +207,7 @@ class TradingApp:
                                     "success"
                                 )
                                 
-                                self.monitor_order(result, "Close")
+                                result = self.monitor_order(result, "Close")
                                 
                                 if result.is_filled():
                                     self.position_closed = True
@@ -198,6 +225,12 @@ class TradingApp:
                                     # Perform audit
                                     self.perform_audit()
                                     self.audit_complete = True
+                                elif result.status == "CANCELLED":
+                                    # Allow retry for sell order
+                                    self.ui.add_system_message(
+                                        "Sell order was cancelled. You can try closing the position again.",
+                                        "warning"
+                                    )
                 
                 elif self.position_closed and self.audit_complete:
                     # Exit prompt
@@ -241,11 +274,16 @@ class TradingApp:
             
             if order_result.status == "CANCELLED":
                 self.ui.add_system_message(f"{order_type} order cancelled", "error")
+                # Update the order_result status before breaking
+                order_result.status = "CANCELLED"
                 break
             elif order_result.is_filled():
                 break
             
             time.sleep(0.5)
+        
+        # Return the updated order result
+        return order_result
     
     def perform_audit(self):
         """Perform position audit"""
@@ -275,6 +313,7 @@ class TradingApp:
         """Run the trading application"""
         print(f"\nStarting IBX Trading Terminal for {self.symbol}")
         print(f"Position size: {self.position_size} shares")
+        print(f"TWS Port: {self.port}")
         print("Connecting to TWS...")
         
         if not self.connect():
@@ -287,8 +326,11 @@ class TradingApp:
         time.sleep(1)
         
         # Initialize UI
-        self.ui = TerminalUI(self.client)
+        self.ui = TerminalUI(self.client, port=self.port)
         self.running = True
+        
+        # Connect UI to log handler
+        ui_handler.set_ui(self.ui)
         
         # Start background threads
         market_thread = threading.Thread(target=self.update_market_data_loop)
@@ -322,6 +364,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description="IBX Trading Terminal with Rich UI - Trade stocks via Interactive Brokers TWS"
     )
+    parser.add_argument("--port", type=int, required=True, help="TWS API port number (must be first argument)")
     parser.add_argument("symbol", type=str, help="Stock symbol to trade (e.g., AAPL)")
     parser.add_argument("position_size", type=int, help="Number of shares to trade")
     parser.add_argument("--demo", action="store_true", help="Run in demo mode without TWS connection")
@@ -333,12 +376,13 @@ def main():
     try:
         args = parse_arguments()
     except SystemExit:
-        print("\nError: Both symbol and position size are required")
-        print("Usage: python main_ui.py <symbol> <position_size>")
-        print("Example: python main_ui.py AAPL 100")
-        print("Demo mode: python main_ui.py AAPL 100 --demo")
+        print("\nError: Port, symbol and position size are required")
+        print("Usage: python main_ui.py --port <port> <symbol> <position_size>")
+        print("Example: python main_ui.py --port 7497 AAPL 100")
+        print("Demo mode: python main_ui.py --port 7497 AAPL 100 --demo")
         sys.exit(1)
     
+    port = args.port
     symbol = args.symbol.upper()
     position_size = args.position_size
     
@@ -349,9 +393,9 @@ def main():
     if args.demo:
         print("\nRunning in DEMO mode - no real trading")
         import ui_demo
-        ui_demo.main()
+        ui_demo.main(port=port)
     else:
-        app = TradingApp(symbol, position_size)
+        app = TradingApp(port, symbol, position_size)
         success = app.run()
         sys.exit(0 if success else 1)
 
