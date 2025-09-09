@@ -41,6 +41,15 @@ logging.getLogger("ibapi.wrapper").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
+# Try to import technical indicators module
+try:
+    from technical_indicators import TechnicalAnalysisClient
+    TECH_INDICATORS_AVAILABLE = True
+except ImportError:
+    logger.warning("Technical indicators module not available")
+    TechnicalAnalysisClient = None
+    TECH_INDICATORS_AVAILABLE = False
+
 
 class TradingApp:
     def __init__(self, port: int, symbol: str, position_size: int):
@@ -48,6 +57,7 @@ class TradingApp:
         self.symbol = symbol
         self.position_size = position_size
         self.client = None
+        self.tech_client = None
         self.ui = None
         self.running = False
         
@@ -57,6 +67,12 @@ class TradingApp:
         self.position_closed = False
         self.close_order = None
         self.audit_complete = False
+        
+        # Track last indicator updates
+        self.last_10s_indicators = None
+        self.last_30s_indicators = None
+        self.last_10s_update_time = None
+        self.last_30s_update_time = None
     
     def connect(self) -> bool:
         """Connect to TWS"""
@@ -64,6 +80,22 @@ class TradingApp:
         
         if not self.client.connect_to_tws(host="127.0.0.1", port=self.port, client_id=1):
             return False
+        
+        # Connect technical analysis client if available
+        if TECH_INDICATORS_AVAILABLE:
+            try:
+                self.tech_client = TechnicalAnalysisClient()
+                if not self.tech_client.connect_to_tws(host="127.0.0.1", port=self.port, client_id=2):
+                    logger.warning("Failed to connect technical analysis client")
+                    self.tech_client = None
+                else:
+                    # Start technical analysis for the symbol
+                    self.tech_client.start_technical_analysis(self.symbol)
+            except Exception as e:
+                logger.warning(f"Could not initialize technical analysis: {e}")
+                self.tech_client = None
+        else:
+            self.tech_client = None
         
         return True
     
@@ -92,7 +124,7 @@ class TradingApp:
                     
                     self.ui.update_market_data(self.symbol, market_data)
                     
-                    # Update position data if we have a position
+                    # Always update position data (show zeros when no position)
                     if self.symbol in self.client.positions:
                         position = self.client.positions[self.symbol]
                         position_data = {
@@ -102,19 +134,100 @@ class TradingApp:
                             "realized_pnl": 0,
                             "commission": self.client.commissions.get(self.symbol, {}).get("total", 0)
                         }
-                        self.ui.update_position_data(position_data)
+                    else:
+                        # No position - show zeros
+                        position_data = {
+                            "quantity": 0,
+                            "avg_cost": 0,
+                            "current_price": quote.last_price,
+                            "realized_pnl": 0,
+                            "commission": self.client.commissions.get(self.symbol, {}).get("total", 0)
+                        }
+                    self.ui.update_position_data(position_data)
                     
-                    # Simulate indicators (would be calculated from real data)
-                    indicators = {
-                        "current_price": quote.last_price,
-                        "ema9": quote.last_price - 0.15,  # Placeholder
-                        "vwap": quote.last_price - 0.40,  # Placeholder
-                        "macd": 0.45,  # Placeholder
-                        "macd_signal": 0.32,  # Placeholder
-                        "volume_trend": "increasing" if quote.volume > 40000000 else "stable",
-                        "rsi": 65.4  # Placeholder
+                    # Update order data if we have filled orders
+                    if self.filled_order:
+                        self.ui.update_order_status(
+                            order_id=self.filled_order.order_id,
+                            status="FILLED",
+                            filled_qty=self.filled_order.quantity,
+                            total_qty=self.filled_order.quantity,
+                            avg_price=self.filled_order.avg_fill_price if hasattr(self.filled_order, 'avg_fill_price') else 0
+                        )
+                    elif self.close_order:
+                        self.ui.update_order_status(
+                            order_id=self.close_order.order_id,
+                            status="FILLED",
+                            filled_qty=self.close_order.quantity,
+                            total_qty=self.close_order.quantity,
+                            avg_price=self.close_order.avg_fill_price if hasattr(self.close_order, 'avg_fill_price') else 0
+                        )
+                    
+                    # Initialize empty indicators - will only show real values
+                    indicators_10s = {
+                        "current_price": quote.last_price
                     }
-                    self.ui.update_indicators(indicators)
+                    indicators_30s = {
+                        "current_price": quote.last_price
+                    }
+                    
+                    # Check if tech client has indicator values and update UI
+                    if self.tech_client:
+                        # Debug logging
+                        if not hasattr(self, '_indicators_logged'):
+                            self._indicators_logged = 0
+                        self._indicators_logged += 1
+                        if self._indicators_logged % 10 == 0:  # Log every 10 iterations
+                            logger.debug(f"Tech client state: indicators_10sec={self.tech_client.indicators_10sec is not None}, "
+                                       f"indicators_30sec={self.tech_client.indicators_30sec is not None}, "
+                                       f"bars_10sec={len(self.tech_client.bars_10sec)}, "
+                                       f"bars_30sec={len(self.tech_client.bars_30sec)}")
+                        
+                        # For 10-second indicators
+                        if self.tech_client.indicators_10sec:
+                            ind = self.tech_client.indicators_10sec
+                            indicators_10s = {
+                                "current_price": quote.last_price,
+                                "ema9": ind.ema9,
+                                "vwap": ind.vwap,
+                                "macd": ind.macd,
+                                "macd_signal": ind.macd_signal,
+                                "macd_histogram": ind.macd_histogram if hasattr(ind, 'macd_histogram') else None
+                            }
+                            
+                            # Log only when we get new bar data
+                            if self.last_10s_update_time != self.tech_client.last_10sec_update:
+                                self.last_10s_update_time = self.tech_client.last_10sec_update
+                                logger.info(f"New 10s bar received at {self.last_10s_update_time}")
+                        else:
+                            # Log why indicators are not available
+                            if self._indicators_logged % 10 == 0:
+                                logger.debug(f"10s indicators not available yet, bars count: {len(self.tech_client.bars_10sec)}")
+                        
+                        # For 30-second indicators
+                        if self.tech_client.indicators_30sec:
+                            ind = self.tech_client.indicators_30sec
+                            indicators_30s = {
+                                "current_price": quote.last_price,
+                                "ema9": ind.ema9,
+                                "vwap": ind.vwap,
+                                "macd": ind.macd,
+                                "macd_signal": ind.macd_signal,
+                                "macd_histogram": ind.macd_histogram if hasattr(ind, 'macd_histogram') else None
+                            }
+                            
+                            # Log only when we get new bar data
+                            if self.last_30s_update_time != self.tech_client.last_30sec_update:
+                                self.last_30s_update_time = self.tech_client.last_30sec_update
+                                logger.info(f"New 30s bar received at {self.last_30s_update_time}")
+                        else:
+                            # Log why indicators are not available
+                            if self._indicators_logged % 10 == 0:
+                                logger.debug(f"30s indicators not available yet, bars count: {len(self.tech_client.bars_30sec)}")
+                    
+                    # Update UI with indicators (values only change when new bars arrive)
+                    self.ui.update_indicators_10s(indicators_10s)
+                    self.ui.update_indicators_30s(indicators_30s)
                     
                 time.sleep(1)
             except Exception as e:
@@ -168,6 +281,16 @@ class TradingApp:
                             if result.is_filled():
                                 self.order_filled = True
                                 self.filled_order = result
+                                
+                                # Update order status display with filled information
+                                self.ui.update_order_status(
+                                    order_id=result.order_id,
+                                    status="FILLED",
+                                    filled_qty=result.quantity,
+                                    total_qty=result.quantity,
+                                    avg_price=result.avg_fill_price if hasattr(result, 'avg_fill_price') else 0
+                                )
+                                
                                 self.ui.add_system_message(
                                     f"Order filled: {result.quantity} shares @ ${result.avg_fill_price:.2f}",
                                     "success"
@@ -175,6 +298,8 @@ class TradingApp:
                             elif result.status == "CANCELLED":
                                 # Reset flags to allow retry
                                 self.order_placed = False
+                                self.order_filled = False
+                                self.filled_order = None
                                 self.ui.add_system_message(
                                     "Order was cancelled. You can try placing a new order.",
                                     "warning"
@@ -213,6 +338,15 @@ class TradingApp:
                                     self.position_closed = True
                                     self.close_order = result
                                     
+                                    # Update order status display with filled information
+                                    self.ui.update_order_status(
+                                        order_id=result.order_id,
+                                        status="FILLED",
+                                        filled_qty=result.quantity,
+                                        total_qty=result.quantity,
+                                        avg_price=result.avg_fill_price if hasattr(result, 'avg_fill_price') else 0
+                                    )
+                                    
                                     # Calculate final P&L
                                     pnl = (result.avg_fill_price - position["avg_cost"]) * position["quantity"]
                                     self.client.pnl[self.symbol] = pnl
@@ -227,6 +361,7 @@ class TradingApp:
                                     self.audit_complete = True
                                 elif result.status == "CANCELLED":
                                     # Allow retry for sell order
+                                    # Do not reset position_closed flag so user can try again
                                     self.ui.add_system_message(
                                         "Sell order was cancelled. You can try closing the position again.",
                                         "warning"
@@ -281,6 +416,16 @@ class TradingApp:
                 break
             
             time.sleep(0.5)
+        
+        # Update the UI with final order status after monitoring completes
+        final_order_data = {
+            "order_id": order_result.order_id,
+            "status": "FILLED" if order_result.is_filled() else order_result.status,
+            "filled_qty": order_result.filled_qty if hasattr(order_result, 'filled_qty') else order_result.quantity,
+            "total_qty": order_result.quantity,
+            "avg_price": order_result.avg_fill_price if hasattr(order_result, 'avg_fill_price') else 0
+        }
+        self.ui.update_order_status(**final_order_data)
         
         # Return the updated order result
         return order_result
@@ -349,6 +494,10 @@ class TradingApp:
         finally:
             self.running = False
             self.ui.stop()
+            
+            if self.tech_client:
+                self.tech_client.stop_analysis()
+                self.tech_client.disconnect_from_tws()
             
             if self.client and self.client.is_connected():
                 self.client.disconnect_from_tws()

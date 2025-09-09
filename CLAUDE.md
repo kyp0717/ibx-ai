@@ -50,12 +50,15 @@ All generated content goes in `context/` submodule:
 - Max 500 lines per file - refactor if approaching limit
 
 ## Testing Requirements
-- **CRITICAL**: Use tws-test-agent agent 
-- If the subagent does not exist create using definition from `context/agents/tws-test-agent.md`.
-- Use uv virtual environment for all testing
+- **CRITICAL**: ALWAYS use tws-test-agent agent for ALL testing tasks
+- **NEVER** run tests directly with python or pytest commands
+- **ALWAYS** invoke tests through Task tool with subagent_type="tws-test-agent"
+- The tws-test-agent automatically uses uv virtual environment
+- If the subagent does not exist create using definition from `context/agents/tws-test-agent.md`
 - Store tests in `tests/` folder
 - Update existing unit tests when logic changes
 - Do not update README.md after testing
+- **REMINDER**: For ANY testing task, use: Task tool with subagent_type="tws-test-agent"
 
 ## Feature Development Pattern
 When adding new features:

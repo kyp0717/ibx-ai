@@ -17,17 +17,16 @@ from rich.align import Align
 from threading import Lock
 
 from .panels.header_panel import HeaderPanel
-from .panels.system_message_panel import SystemMessagePanel
-from .panels.log_panel import LogPanel
-from .panels.market_data_panel import MarketDataPanel
-from .panels.position_orders_panel import PositionOrdersPanel
 from .panels.indicators_panel import IndicatorsPanel
-from .panels.trading_prompt import TradingPrompt
+from .panels.action_panel import ActionPanel
+from .panels.pnl_panel import PnLPanel
+from .panels.quote_panel import QuotePanel
+from .panels.log_panel import LogPanel
 
 
 class TerminalUI:
     def __init__(self, client=None, port: int = 7497):
-        self.console = Console()
+        self.console = Console(width=100)
         self.client = client
         self.port = port
         self.layout = Layout()
@@ -36,7 +35,8 @@ class TerminalUI:
         self.market_data = {}
         self.position_data = {}
         self.order_data = {}
-        self.indicators_data = {}
+        self.indicators_10s = {}
+        self.indicators_30s = {}
         self.messages = []
         self.log_messages = []
         self.prompt_text = ""
@@ -48,33 +48,27 @@ class TerminalUI:
     def _setup_layout(self):
         """Setup the main layout structure"""
         self.layout.split(
-            Layout(name="header", size=4),
-            Layout(name="top_panels", size=5),
-            Layout(name="main", size=15),
-            Layout(name="indicators", size=7),
-            Layout(name="prompt", size=3)
+            Layout(name="header", size=8),
+            Layout(name="indicators", size=10),  # Indicators panel
+            Layout(name="middle_panels", size=8),   # Quote and PnL panels
+            Layout(name="action", size=12),  # Action panel
+            Layout(name="log", size=12)  # Log panel at bottom
         )
         
-        # Split top panels into system messages and logs side by side
-        self.layout["top_panels"].split_row(
-            Layout(name="messages", ratio=1),
-            Layout(name="logs", ratio=1)
-        )
-        
-        self.layout["main"].split_row(
-            Layout(name="market", ratio=1),
-            Layout(name="position", ratio=1)
+        # Middle panels: Quote (left, 50 cols) and PnL (right, 50 cols) side by side
+        self.layout["middle_panels"].split_row(
+            Layout(name="quote", size=50),
+            Layout(name="pnl", size=50)
         )
     
     def _init_panels(self):
         """Initialize all panel instances"""
         self.header_panel = HeaderPanel()
-        self.message_panel = SystemMessagePanel()
-        self.log_panel = LogPanel()
-        self.market_panel = MarketDataPanel()
-        self.position_panel = PositionOrdersPanel()
         self.indicators_panel = IndicatorsPanel()
-        self.trading_prompt = TradingPrompt()
+        self.action_panel = ActionPanel()
+        self.pnl_panel = PnLPanel()
+        self.quote_panel = QuotePanel()
+        self.log_panel = LogPanel()
     
     def update_market_data(self, symbol: str, data: Dict[str, Any]):
         """Update market data for display"""
@@ -112,10 +106,15 @@ class TerminalUI:
                 "avg_price": avg_price
             }
     
-    def update_indicators(self, indicators: Dict[str, Any]):
-        """Update technical indicators"""
+    def update_indicators_10s(self, indicators: Dict[str, Any]):
+        """Update 10-second technical indicators"""
         with self.data_lock:
-            self.indicators_data = indicators
+            self.indicators_10s = indicators
+    
+    def update_indicators_30s(self, indicators: Dict[str, Any]):
+        """Update 30-second technical indicators"""
+        with self.data_lock:
+            self.indicators_30s = indicators
     
     def add_system_message(self, message: str, msg_type: str = "info"):
         """Add a system message to the log"""
@@ -149,43 +148,44 @@ class TerminalUI:
     def render(self) -> Layout:
         """Render the complete UI layout"""
         with self.data_lock:
+            # Pass system messages to header panel (these are TWS messages)
+            
             self.layout["header"].update(
                 self.header_panel.render(
                     connected=self.client.is_connected() if self.client else False,
                     order_id=self.client.next_order_id if (self.client and self.client.next_order_id) else 0,
-                    port=self.port
+                    port=self.port,
+                    messages=self.messages  # Pass all system messages (TWS messages)
                 )
             )
             
-            self.layout["messages"].update(
-                self.message_panel.render(self.messages)
+            # Update indicators panel with current values
+            self.layout["indicators"].update(
+                self.indicators_panel.render(self.indicators_10s, self.indicators_30s)
             )
             
-            self.layout["logs"].update(
-                self.log_panel.render(self.log_messages)
+            self.layout["quote"].update(
+                self.quote_panel.render(self.market_data, with_panel=True)
             )
             
-            self.layout["market"].update(
-                self.market_panel.render(self.market_data)
+            self.layout["pnl"].update(
+                self.pnl_panel.render(self.position_data, self.market_data)
             )
             
-            self.layout["position"].update(
-                self.position_panel.render(
+            self.layout["action"].update(
+                self.action_panel.render(
+                    self.prompt_text or "Waiting for market data...",
+                    self.market_data.get("symbol", ""),
+                    self.market_data.get("ask_price", 0),
+                    self.indicators_10s,  # Use 10s indicators for action signals
                     self.position_data,
                     self.order_data
                 )
             )
             
-            self.layout["indicators"].update(
-                self.indicators_panel.render(self.indicators_data)
-            )
-            
-            self.layout["prompt"].update(
-                self.trading_prompt.render(
-                    self.prompt_text or "Waiting for market data...",
-                    self.market_data.get("symbol", ""),
-                    self.market_data.get("ask_price", 0)
-                )
+            # Update log panel with log messages
+            self.layout["log"].update(
+                self.log_panel.render(self.log_messages)
             )
         
         return self.layout
