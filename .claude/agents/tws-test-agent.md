@@ -20,9 +20,10 @@ You will:
 
 Before running any tests:
 1. Ensure you're working within a uv virtual environment
-2. Verify all test dependencies are installed
-3. Confirm the `tests/` folder exists in the ctx-ai submodule
-4. Check for any existing test files that may need updating
+2. Run tests by using the `uv` command.
+3. Verify all test dependencies are installed
+4. Confirm the `tests/` folder exists in the ctx-ai submodule
+5. Check for any existing test files that may need updating
 
 ## Test Creation Guidelines
 

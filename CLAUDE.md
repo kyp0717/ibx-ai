@@ -3,7 +3,7 @@ Interactive Brokers trading application using Python and IBAPI.
 
 ## Project Awareness
 **At conversation start, read**:
-- `context/project-plan/*.md` - Architecture, style, constraints
+- `context/implement-plan/*.md` - Architecture, style, constraints
 - `context/tasks.md` - Current progress and feature status
 - `context/requirements.md` - Technical specifications
 - `context/logs/*.md` - Completed features and issues
@@ -50,12 +50,15 @@ All generated content goes in `context/` submodule:
 - Max 500 lines per file - refactor if approaching limit
 
 ## Testing Requirements
-- **CRITICAL**: Use tws-test-agent agent 
-- If the subagent does not exist create using definition from `context/agents/tws-test-agent.md`.
-- Use uv virtual environment for all testing
+- **CRITICAL**: ALWAYS use tws-test-agent agent for ALL testing tasks
+- **NEVER** run tests directly with python or pytest commands
+- **ALWAYS** invoke tests through Task tool with subagent_type="tws-test-agent"
+- The tws-test-agent automatically uses uv virtual environment
+- If the subagent does not exist create using definition from `context/agents/tws-test-agent.md`
 - Store tests in `tests/` folder
 - Update existing unit tests when logic changes
 - Do not update README.md after testing
+- **REMINDER**: For ANY testing task, use: Task tool with subagent_type="tws-test-agent"
 
 ## Feature Development Pattern
 When adding new features:
@@ -63,12 +66,15 @@ When adding new features:
 1. **Module Structure**
    - Create new file in `src/` named after feature
    - Define main struct and result types
-   - **scripts/** - Shell scripts and automation
 
 2. **Testing**
    - Create unit tests in `tests/test_your_feature_unit.py`
    - Follow strict TDD: RED → GREEN → REFACTOR
    - Each feature must be independent and self-contained
+
+3. **Scripts**
+   - Create new scripts and save to `scripts/` folder
+   - Shell scripts and automation
 
 ## Documentation Requirements
 - Update README.md only when: features added, dependencies change, setup modified
