@@ -18,7 +18,7 @@ from threading import Lock
 
 from .panels.header_panel import HeaderPanel
 from .panels.indicators_panel import IndicatorsPanel
-from .panels.action_panel import ActionPanel
+from .panels.trading_panel import TradingPanel
 from .panels.pnl_panel import PnLPanel
 from .panels.quote_panel import QuotePanel
 from .panels.log_panel import LogPanel
@@ -51,7 +51,7 @@ class TerminalUI:
             Layout(name="header", size=8),
             Layout(name="indicators", size=10),  # Indicators panel
             Layout(name="middle_panels", size=8),   # Quote and PnL panels
-            Layout(name="action", size=12),  # Action panel
+            Layout(name="trading", size=12),  # Trading panel
             Layout(name="log", size=12)  # Log panel at bottom
         )
         
@@ -65,7 +65,7 @@ class TerminalUI:
         """Initialize all panel instances"""
         self.header_panel = HeaderPanel()
         self.indicators_panel = IndicatorsPanel()
-        self.action_panel = ActionPanel()
+        self.trading_panel = TradingPanel()
         self.pnl_panel = PnLPanel()
         self.quote_panel = QuotePanel()
         self.log_panel = LogPanel()
@@ -172,8 +172,8 @@ class TerminalUI:
                 self.pnl_panel.render(self.position_data, self.market_data)
             )
             
-            self.layout["action"].update(
-                self.action_panel.render(
+            self.layout["trading"].update(
+                self.trading_panel.render(
                     self.prompt_text or "Waiting for market data...",
                     self.market_data.get("symbol", ""),
                     self.market_data.get("ask_price", 0),

@@ -101,3 +101,36 @@ for bar in bars_list[:-1]:  # list supports slice
 5. UI panels updated
 (Failure at step 2 cascades through entire pipeline)
 
+## Feature 06 - Indicator Difference Calculation and Display Stability
+**Purpose**: Calculate and display price differences correctly with stable formatting
+
+**Problem When Not Handled Correctly**:
+- **Value Flickering**: Third column in 10/30 bar panels flickers between cents ($0.02) and dollars ($1.02)
+- **Incorrect Calculation**: Was showing Indicator - Price instead of Price - Indicator
+- **Signal Misalignment**: Trading signals (BUY/SELL) didn't match price position relative to indicators
+- **User Confusion**: Unstable values make it difficult to interpret market position
+- **Floating Point Issues**: Precision errors cause display inconsistencies
+
+**Implementation Details**:
+- Calculate difference as: Current Price - Indicator Value (not Indicator - Price)
+- Round all differences to 2 decimal places to avoid floating point precision issues
+- Apply 0.005 threshold to prevent flickering when values are near zero
+- Ensure current_price > 0 before calculating differences
+
+**Items**:
+- Calculation formula: `price_vs_indicator = round(current_price - indicator_value, 2)`
+- Threshold logic: Use 0.005 to determine if difference is significant
+- Display format: Always show as `${abs(difference):.2f}` for consistency
+- Implementation location: `src/ui/panels/indicators_panel.py`, lines 65-110
+
+**Signal Interpretation**:
+- **Positive difference (▲ green)**: Price is ABOVE indicator → Bullish (BUY signal)
+- **Negative difference (▼ red)**: Price is BELOW indicator → Bearish (SELL signal)
+- **Near zero (─ yellow)**: Price equals indicator → Neutral (HOLD signal)
+
+**Visual Consistency**:
+1. Arrow direction matches price position (▲ = price higher, ▼ = price lower)
+2. Arrow color matches difference sign (green = positive, red = negative)
+3. Signal color matches trading action (green = BUY, red = SELL)
+4. Values always display with 2 decimal places ($X.XX format)
+

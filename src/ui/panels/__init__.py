@@ -4,7 +4,7 @@ from .position_orders_panel import PositionOrdersPanel
 from .indicators_panel import IndicatorsPanel
 from .trading_prompt import TradingPrompt
 from .market_status_panel import MarketStatusPanel
-from .action_panel import ActionPanel
+from .trading_panel import TradingPanel
 from .pnl_panel import PnLPanel
 from .quote_panel import QuotePanel
 from .signal_panel import SignalPanel
@@ -16,7 +16,7 @@ __all__ = [
     "IndicatorsPanel",
     "TradingPrompt",
     "MarketStatusPanel",
-    "ActionPanel",
+    "TradingPanel",
     "PnLPanel",
     "QuotePanel",
     "SignalPanel"

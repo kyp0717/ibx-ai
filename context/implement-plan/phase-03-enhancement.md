@@ -65,31 +65,50 @@ Multi-panel terminal user interface using Rich framework for professional tradin
 **Purpose**: Allow order placement to work after manual order cancelation in TWS
 
 
-### 6. Action  Panel Redesign
+### 6. Trading Panel Redesign (COMPLETED)
 **Purpose**: Let user know that the app is awaiting user respond
+**Status**: ✅ Implemented on 2025-01-10
+**Implementation Notes**:
+- Renamed from Action Panel to Trading Panel (class: TradingPanel, file: trading_panel.py)
+- Panel uses side-by-side layout with left side for prompts and right side for position/orders
+
 **Items**:
-- Move Action panel below the Quote and PnL Panel (above the Log Panel)
-- Yellow border.
-- Name the panel ACTION
-- Content should be justified left
-- All content inside this action panel
-- Prompt format:
+- ✅ Rename the Action panel to '<Stock> Trade' for the current stock being tracked
+- ✅ Position the trading panel below the Quote and PnL Panel (above the Log Panel)
+- ✅ Yellow border
+- ✅ Content inside the trading panel is justified left
+- ✅ Side-by-side layout implemented within the panel:
+  - Left side (50 columns): Time, signal/status, and action prompts
+  - Right side (46 columns): Position and order information
+- ✅ Prompt format:
+  - If the position is zero:
+    - First line: 
+      - Item 1: [ <current time with format HH:MM:SS> ]
+      - Item 2:
+        - ** Signal: Buy **  (green)
+        - or ** Signal: Sell ** (red)
+        - or ** Signal: Hold ** (yellow)
+    - Second line: 
+      - Buy <stock> at <current stock quote> (press enter) ?
+  - If the position is greater than 0 but less than 100:
+    - First line: 
+      - Item 1: [ <current time with format HH:MM:SS> ]
+      - Item 2:
+        - ** Opening position ... **
+    - Second line: 
+        - Review position status (see panel to the right)
+  - If the position is filled (at size 100):
   - First line: 
     - Item 1: [ <current time with format HH:MM:SS> ]
-    - Item 2: [ <stock symbol> ]
-    - Item 3:
-      - ** Signal: Buy **  (green)
-      - or ** Signal: Sell ** (red)
-      - or ** Signal: Hold ** (yellow)
+    - Item 2:
+      - ** Position is filled! **
   - Second line: 
-    - Buy <stock> at <current stock quote> (press enter) ?
-    - Sell <stock> at <current stock quote> (press enter) ?
-- Move the Position and Order Panel to inside the Action panel.
-  - Change the Position and Order Panel to Order
-  - Move Order panel to the top.
-  - Remove the column headers
-  - Create a vertical line to separate position and order section inside the Order pane.
-  - Remove the border on the Order Panel
+      - Sell <stock> at <current stock quote> (press enter) ?
+- ✅ Move Order Panel to inside the trading panel
+  - ✅ Position Order panel to the right side (side-by-side with main content)
+  - ✅ Remove the column headers
+  - ✅ Create a vertical line to separate position and order section inside the Order panel
+  - ✅ Remove the border on the Order Panel
   
 
 ### 7. Indicator Panel

@@ -1,5 +1,5 @@
 """
-ACTION panel with integrated signal display and nested position/orders
+Trading panel with integrated signal display and nested position/orders
 """
 
 from rich.panel import Panel
@@ -11,20 +11,23 @@ from datetime import datetime
 from typing import Dict, Any
 
 
-class ActionPanel:
+class TradingPanel:
     def __init__(self):
         pass
         
     def render(self, prompt_text: str, symbol: str = "", price: float = 0,
                indicators: Dict[str, Any] = None, position_data: Dict[str, Any] = None,
                order_data: Dict[str, Any] = None) -> Panel:
-        """Render the ACTION panel with signal, prompt, and position/orders"""
+        """Render the Trading panel with signal, prompt, and position/orders"""
         
-        # Main container (left-justified)
-        main_table = Table(show_header=False, box=None, padding=(0, 2), expand=True)
-        main_table.add_column(justify="left")
+        # Left side content (main prompts)
+        left_content = Table(show_header=False, box=None, padding=(0, 0), expand=False)
+        left_content.add_column(justify="left", width=50)
         
-        # First line: Time, Symbol, and Signal
+        # Get position quantity
+        position_qty = position_data.get("quantity", 0) if position_data else 0
+        
+        # First line: Time and Status/Signal
         first_line = Text()
         
         # Current time
@@ -32,53 +35,57 @@ class ActionPanel:
         first_line.append(f"[ {current_time} ]", style="cyan")
         first_line.append("  ", style="")
         
-        # Stock symbol
-        if symbol:
-            first_line.append(f"[ {symbol} ]", style="bold white")
-        else:
-            first_line.append("[ - ]", style="dim white")
-        first_line.append("  ", style="")
+        # Determine status based on position
+        if position_qty == 0:
+            # No position - show signal
+            signal_text = self._determine_signal(indicators, price)
+            first_line.append(signal_text)
+        elif 0 < position_qty < 100:
+            # Partial position
+            first_line.append("** Opening position ... **", style="bold yellow")
+        elif position_qty >= 100:
+            # Full position
+            first_line.append("** Position is filled! **", style="bold green")
         
-        # Trading signal based on indicators
-        signal_text = self._determine_signal(indicators, price)
-        first_line.append(signal_text)
+        left_content.add_row(first_line)
         
-        main_table.add_row(first_line)
+        # Second line: Action prompt based on position
+        prompt_line = Text()
         
-        # Second line: Action prompt
         if symbol and price > 0:
-            prompt_line = Text()
-            
-            if "Open Trade" in prompt_text or "buy" in prompt_text.lower():
-                prompt_line.append(f"Buy {symbol} at ${price:.2f} ", style="bold white")
-                prompt_line.append("(press enter)?", style="yellow")
-            elif "Close position" in prompt_text or "sell" in prompt_text.lower():
-                prompt_line.append(f"Sell {symbol} at ${price:.2f} ", style="bold white")
-                prompt_line.append("(press enter)?", style="yellow")
-            elif "Exit" in prompt_text:
-                prompt_line.append(f"Exit {symbol} trade ", style="bold white")
-                prompt_line.append("(press enter)?", style="yellow")
-            else:
-                prompt_line.append(prompt_text, style="white")
+            if position_qty == 0:
+                # No position - prompt to buy
+                prompt_line.append(f"Buy {symbol} at {price:.2f} ", style="bold white")
+                prompt_line.append("(press enter) ?", style="yellow")
+            elif 0 < position_qty < 100:
+                # Partial position - review status
+                prompt_line.append("Review position status (see panel to the right)", style="white")
+            elif position_qty >= 100:
+                # Full position - prompt to sell
+                prompt_line.append(f"Sell {symbol} at {price:.2f} ", style="bold white")
+                prompt_line.append("(press enter) ?", style="yellow")
         else:
-            prompt_line = Text("Waiting for action...", style="dim white")
+            prompt_line = Text("Waiting for market data...", style="dim white")
         
-        main_table.add_row(prompt_line)
+        left_content.add_row(prompt_line)
         
-        # Position and Orders section
-        pos_order_table = self._create_position_orders_table(position_data, order_data)
+        # Right side content (position and orders)
+        right_content = self._create_position_orders_table(position_data, order_data)
         
-        # Combine main content with position/orders
-        full_content = Table(show_header=False, box=None, padding=0, expand=True)
-        full_content.add_column()
-        full_content.add_row(main_table)
-        full_content.add_row("")  # Spacer
-        # No horizontal line above Order section as per requirements
-        full_content.add_row(pos_order_table)
+        # Create side-by-side layout
+        side_by_side = Table(show_header=False, box=None, padding=0, expand=True)
+        side_by_side.add_column(justify="left", width=50)  # Left column for prompts
+        side_by_side.add_column(justify="left", width=46)  # Right column for position/orders
+        
+        # Add both contents side by side
+        side_by_side.add_row(left_content, right_content)
+        
+        # Dynamic title based on symbol
+        panel_title = f"{symbol} Trade" if symbol else "Trade"
         
         return Panel(
-            full_content,
-            title="ACTION",
+            side_by_side,
+            title=panel_title,
             title_align="center",
             border_style="yellow",
             style="on black",
@@ -136,14 +143,14 @@ class ActionPanel:
                                      order_data: Dict[str, Any]) -> Table:
         """Create orders display with position info (no border)"""
         # Create table without headers
-        table = Table(show_header=False, box=None, padding=(0, 1))
+        table = Table(show_header=False, box=None, padding=(0, 0))
         
         # Order section (moved to top)
-        table.add_column("Label", style="cyan", width=12)
-        table.add_column("Value", style="white", width=15)
-        table.add_column("", width=1)  # Vertical separator column
-        table.add_column("Label2", style="cyan", width=12)
-        table.add_column("Value2", style="white", width=15)
+        table.add_column("Label", style="cyan", width=10)
+        table.add_column("Value", style="white", width=10)
+        table.add_column("", width=2)  # Vertical separator column
+        table.add_column("Label2", style="cyan", width=10)
+        table.add_column("Value2", style="white", width=10)
         
         # Order data
         order_id = order_data.get("order_id", "-") if order_data else "-"
